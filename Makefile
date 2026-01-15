@@ -1,4 +1,4 @@
-# ---------- Root Makefile ----------
+# ---------- Root Makefile (Workflow-2) ----------
 
 # Toolchain
 RISCV_PREFIX = riscv32-unknown-elf
@@ -25,7 +25,7 @@ BUILD_DIR = build/$(DIR)
 C_SRCS = $(wildcard $(SRC_DIR)/*.c)
 S_SRCS = $(wildcard $(SRC_DIR)/*.s) $(wildcard $(SRC_DIR)/*.S)
 
-# Objects (ONLY .o files)
+# Objects
 OBJS = \
 	$(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(C_SRCS)) \
 	$(patsubst $(SRC_DIR)/%.s,$(BUILD_DIR)/%.o,$(filter %.s,$(S_SRCS))) \
@@ -47,18 +47,18 @@ $(BUILD_DIR):
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Compile Assembly (.s / .S)
+# Compile Assembly
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.s | $(BUILD_DIR)
 	$(CC) $(ASFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.S | $(BUILD_DIR)
 	$(CC) $(ASFLAGS) -c $< -o $@
 
-# Link (OBJECT FILES ONLY)
+# Link
 $(ELF): $(OBJS) $(LINKER)
 	$(LD) -T $(LINKER) -o $@ $(OBJS)
 
-# ---------------- Run / Debug ----------------
+# ---------------- Run QEMU ----------------
 
 run: all
 	qemu-system-riscv32 \
@@ -68,29 +68,14 @@ run: all
 		-kernel $(ELF) \
 		-S -gdb tcp::1234
 
-gdb:
+# ---------------- GDB (Workflow-2) ----------------
+# GDB automatically starts QEMU first
+gdb: run
 	$(GDB) -q $(ELF) -x $(GDBSCR)
 
-# ---------------- Process Control ----------------
-
-kill:
-	@PIDS=$$(ps aux | grep qemu-system-riscv32 | grep -v grep | awk '{print $$2}'); \
-	if [ -z "$$PIDS" ]; then \
-		echo "[INFO] QEMU not running"; \
-	else \
-		echo "[INFO] Killing QEMU PID(s): $$PIDS"; \
-		kill $$PIDS || true; \
-	fi
-
-kill-force:
-	@PIDS=$$(ps aux | grep qemu-system-riscv32 | grep -v grep | awk '{print $$2}'); \
-	if [ -n "$$PIDS" ]; then \
-		kill -9 $$PIDS || true; \
-	fi
-
-rerun: kill all run
+# ---------------- Cleanup ----------------
 
 clean:
 	rm -rf $(BUILD_DIR)
 
-.PHONY: all run gdb kill kill-force rerun clean
+.PHONY: all run gdb clean
