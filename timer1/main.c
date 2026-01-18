@@ -15,7 +15,5 @@ void main(void)
 
     task_switch();
 
-    //timer_init();
-
     while (1);
 }

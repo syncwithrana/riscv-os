@@ -5,3 +5,4 @@
 
 void timer_init(void);
 void timer_handler(void);
+void delays(void);
