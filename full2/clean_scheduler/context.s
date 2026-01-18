@@ -1,7 +1,12 @@
 .section .text
 .globl context_switch
 
+# void context_switch(struct context *old_ctx, struct context *new_ctx);
+# a0 = old_ctx
+# a1 = new_ctx
+
 context_switch:
+    # Save all registers to old_ctx (a0)
     sw ra,   0(a0)
     sw sp,   4(a0)
     sw gp,   8(a0)
@@ -11,7 +16,7 @@ context_switch:
     sw t2,  24(a0)
     sw s0,  28(a0)
     sw s1,  32(a0)
-    sw a0,  36(a0)
+    sw a0,  36(a0) # Saving a0 (old_ctx ptr) into itself - mostly for completeness
     sw a1,  40(a0)
     sw a2,  44(a0)
     sw a3,  48(a0)
@@ -33,7 +38,12 @@ context_switch:
     sw t4, 112(a0)
     sw t5, 116(a0)
     sw t6, 120(a0)
+    
+    # Save mepc (optional for cooperative, but consistent with structure)
+    csrr t0, mepc
+    sw t0, 124(a0)
 
+    # Load all registers from new_ctx (a1)
     lw ra,   0(a1)
     lw sp,   4(a1)
     lw gp,   8(a1)
@@ -43,6 +53,8 @@ context_switch:
     lw t2,  24(a1)
     lw s0,  28(a1)
     lw s1,  32(a1)
+    
+    # Skip a0, a1 for now, load others
     lw a2,  44(a1)
     lw a3,  48(a1)
     lw a4,  52(a1)
@@ -63,8 +75,12 @@ context_switch:
     lw t4, 112(a1)
     lw t5, 116(a1)
     lw t6, 120(a1)
+    
+    # Load mepc (if we were preempted, this restores PC)
+    lw t0, 124(a1)
+    csrw mepc, t0
 
-    # Load a0 and a1 last to preserve base pointer a1
+    # Finally load a0/a1
     lw a0,  36(a1)
     lw a1,  40(a1)
 

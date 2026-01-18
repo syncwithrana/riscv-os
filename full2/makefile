@@ -6,7 +6,7 @@ CFLAGS = -march=rv32i_zicsr -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -
 
 all: kernel.elf
 
-kernel.elf: start.o main.o uart.o trap.o context.o timer.o tasks.o
+kernel.elf: start.o main.o uart.o trap.o context.o timer.o tasks.o string.o
 	$(LD) -T linker.ld -o $@ $^
 
 start.o: start.s
@@ -29,6 +29,9 @@ timer.o: timer.c
 
 tasks.o: tasks.c
 	$(CC) $(CFLAGS) -c tasks.c
+
+string.o: string.c
+	$(CC) $(CFLAGS) -c string.c
 
 run:
 	qemu-system-riscv32 \

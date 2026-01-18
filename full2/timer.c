@@ -20,11 +20,12 @@ void timer_init(void)
     MTIMECMP_LO = lo;
 }
 
-void timer_handler(void)
+void trap_handler_c(void)
 {
     uart_putc('T');
+    delays();
     timer_init();
-    //schedule();
+    schedule();
 }
 
 
