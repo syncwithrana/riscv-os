@@ -43,6 +43,7 @@ void init_task(int id, void (*fn)(void))
 {
     tasks[id].ra = (unsigned int)fn;
     tasks[id].sp = (unsigned int)(stacks[id] + STACK_SIZE);
+    tasks[id].mepc = (unsigned int)fn;
 }
 
 void start_task(void)
