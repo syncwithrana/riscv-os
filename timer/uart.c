@@ -1,11 +1,8 @@
-#include "uart.h"
+#define UART0_BASE 0x10000000UL
 
-#define UART0 0x10000000UL
-#define UART_THR (*(volatile unsigned char *)(UART0 + 0))
-#define UART_LSR (*(volatile unsigned char *)(UART0 + 5))
+#define UART_THR (*(volatile unsigned char *)(UART0_BASE + 0x00))
+#define UART_LSR (*(volatile unsigned char *)(UART0_BASE + 0x05))
 #define LSR_TX_IDLE 0x20
-
-void uart_init(void) {}
 
 void uart_putc(char c)
 {
@@ -16,7 +13,8 @@ void uart_putc(char c)
 void uart_puts(const char *s)
 {
     while (*s) {
-        if (*s == '\n') uart_putc('\r');
+        if (*s == '\n')
+            uart_putc('\r');
         uart_putc(*s++);
     }
 }

@@ -4,20 +4,7 @@ SECTIONS
 {
   . = 0x80000000;
 
-  .text : {
-    *(.text*)
-  }
-
-  .rodata : {
-    *(.rodata*)
-  }
-
-  .data : {
-    *(.data*)
-  }
-
-  .bss : {
-    *(.bss*)
-    *(COMMON)
-  }
+  .text : { *(.text*) }
+  .data : { *(.data*) }
+  .bss  : { *(.bss*) *(COMMON) }
 }

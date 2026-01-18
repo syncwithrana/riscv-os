@@ -9,7 +9,7 @@ trap_entry:
     sw t2, 0(sp)
 
     csrr t0, mcause
-    li t1, 0x80000007
+    li t1, 0x80000007      /* machine timer interrupt */
     beq t0, t1, timer_irq
 
 trap_exit:
