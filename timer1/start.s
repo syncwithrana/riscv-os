@@ -4,23 +4,19 @@
 _start:
     la sp, stack_top
 
-    /* set trap vector */
     la t0, trap_entry
     csrw mtvec, t0
 
-    /* enable machine timer interrupt */
-    li t0, (1 << 7)        /* MTIE */
+    li t0, (1 << 7)      /* MTIE */
     csrs mie, t0
 
-    /* enable global interrupts */
-    li t0, (1 << 3)        /* MIE */
+    li t0, (1 << 3)      /* MIE */
     csrs mstatus, t0
 
     call main
 
 hang:
     j hang
-
 
 .section .bss
 .align 16
