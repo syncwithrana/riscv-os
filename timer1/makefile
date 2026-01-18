@@ -2,12 +2,11 @@ CROSS = riscv32-unknown-elf-
 CC = $(CROSS)gcc
 LD = $(CROSS)ld
 
-CFLAGS = -march=rv32i_zicsr -mabi=ilp32 \
-         -ffreestanding -nostdlib -nostartfiles -O0 -g
+CFLAGS = -march=rv32i_zicsr -mabi=ilp32 -ffreestanding -nostdlib -nostartfiles -O0 -g
 
 all: kernel.elf
 
-kernel.elf: start.o main.o uart.o trap.o context.o timer.o sch.o
+kernel.elf: start.o main.o uart.o trap.o context.o timer.o tasks.o
 	$(LD) -T linker.ld -o $@ $^
 
 start.o: start.s
@@ -30,9 +29,6 @@ timer.o: timer.c
 
 tasks.o: tasks.c
 	$(CC) $(CFLAGS) -c tasks.c
-
-sch.o: sch.c
-	$(CC) $(CFLAGS) -c sch.c
 
 run:
 	qemu-system-riscv32 \

@@ -3,42 +3,49 @@
 #include "tasks.h"
 #include "timer.h"
 
-/* ---------- Scheduler ---------- */
-#define NTASKS 3
-#define STACK_SIZE 1024
+#define MAX_TASKS   3
+#define STACK_SIZE  1024
 
-unsigned char stacks[NTASKS][STACK_SIZE];
-struct context tasks[NTASKS];
+unsigned char stacks[MAX_TASKS][STACK_SIZE];
+struct context tasks[MAX_TASKS];
+int current = -1;
+int num_tasks = MAX_TASKS;
+void schedule(void);
 
-int current = 0;
-
-/* ---------- Tasks ---------- */
-
-void taskA(void) {
-    uart_puts("A\n");
-    timer_init();
-    while (1);
-}
-
-void taskB(void) {
-    uart_puts("B\n");
-    timer_init();
-    while (1);
-}
-
-void taskC(void) {
-    uart_puts("C\n");
-    timer_init();
-    while (1);
-}
-
-void init_task(int i, void (*fn)(void))
+void taskA(void)
 {
-    tasks[i].ra = (unsigned int)fn;
-    tasks[i].sp = (unsigned int)(stacks[i] + STACK_SIZE);
+    while (1) {
+        delays();
+        uart_putc('A');
+        schedule();
+    }
 }
 
-void task_switch(void)
+void taskB(void)
+{
+    while (1) {
+        delays();
+        uart_putc('B');
+        schedule();
+    }
+}
+
+void taskC(void)
+{
+    while (1) {
+        delays();
+        uart_putc('C');
+        schedule();
+    }
+}
+
+void init_task(int id, void (*fn)(void))
+{
+    tasks[id].ra = (unsigned int)fn;
+    tasks[id].sp = (unsigned int)(stacks[id] + STACK_SIZE);
+}
+
+void start_task(void)
 {
     current = 0;
     context_switch(&(struct context){0}, &tasks[0]);
@@ -46,13 +53,10 @@ void task_switch(void)
 
 void schedule(void)
 {
-    uart_puts("\nSCHEDULING...\n");
     int prev = current;
-
     current++;
-    if (current >= NTASKS)
+    if (current >= num_tasks)
         current = 0;
 
-    uart_puts("\nSCHEDULING...\n");
     context_switch(&tasks[prev], &tasks[current]);
 }

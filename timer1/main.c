@@ -3,8 +3,6 @@
 #include "context.h"
 #include "tasks.h"
 
-/* ---------- Entry ---------- */
-
 void main(void)
 {
     uart_puts("SCHEDULER START\n");
@@ -13,7 +11,7 @@ void main(void)
     init_task(1, taskB);
     init_task(2, taskC);
 
-    task_switch();
+    start_task();
 
     while (1);
 }
