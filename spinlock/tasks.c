@@ -3,6 +3,9 @@
 #include "uart.h"
 #include "timer.h"
 #include "irq.h"
+#include "spinlock.h"
+
+struct spinlock sched_lock;
 
 struct task tasks[MAX_TASKS];
 volatile unsigned int ticks = 0;
@@ -91,6 +94,8 @@ void schedule(void)
 
 void start_scheduler(void)
 {
+    spinlock_init(&sched_lock);
+
     // We assume task 0 is the first one to run, or we pick one.
     // Let's pick the first runnable one.
     int i;
@@ -107,12 +112,12 @@ void start_scheduler(void)
 
 void sleep(unsigned int n)
 {
-    unsigned int flags = irq_disable(); // Critical section
+    spin_lock(&sched_lock);
 
     tasks[current_task].state = TASK_SLEEPING;
     tasks[current_task].wakeup_tick = ticks + n;
 
-    irq_restore(flags);
+    spin_unlock(&sched_lock);
 
     // Yield control
     // We can just wait for next timer interrupt to switch us out, 
