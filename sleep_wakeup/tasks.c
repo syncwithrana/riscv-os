@@ -2,103 +2,173 @@
 #include "context.h"
 #include "uart.h"
 #include "timer.h"
+#include "irq.h"
 
-// ALIGNED STACKS to avoid 'T'-only trap loops
-unsigned char stacks[MAX_TASKS][STACK_SIZE] __attribute__((aligned(16)));
-struct context tasks[MAX_TASKS];
+struct task tasks[MAX_TASKS];
+volatile unsigned int ticks = 0;
 
 int current_task = -1;
-int num_active_tasks = MAX_TASKS;
 
 void task_entry(void (*fn)(void))
 {
     // Enable interrupts in mstatus so this task can be preempted!
-    asm volatile("csrs mstatus, %0" : : "r" (1 << 3)); // MIE
+    irq_enable();
     
     fn();
     
-    // Fallback if task returns (should not happen in this demo)
+    // Fallback if task returns
     while(1);
 }
 
 void init_task(int id, void (*fn)(void))
 {
     // Point ra to task_entry wrapper
-    tasks[id].ra = (unsigned int)task_entry;
+    tasks[id].ctx.ra = (unsigned int)task_entry;
     
-    // sp points to top of stack
-    tasks[id].sp = (unsigned int)(stacks[id] + STACK_SIZE);
+    // sp points to top of stack (stack grows down)
+    tasks[id].ctx.sp = (unsigned int)(tasks[id].stack + STACK_SIZE);
     
     // a0 gets the function pointer (argument to task_entry)
-    tasks[id].a0 = (unsigned int)fn;
+    tasks[id].ctx.a0 = (unsigned int)fn;
     
-    // mepc also points to entry (used by mret if we strictly used mret, 
-    // but context_switch uses ret. However, if we switch TO it via interrupt 
-    // path, we might rely on proper mepc. 
-    // actually our context_switch uses ret, so ra is used.
-    // mepc is only used if we switch via mret which we don't do directly in context_switch.)
-    // Wait, context_switch loads t0 from mepc slot and writes to mepc CSR.
-    // But it returns via `ret` (using ra).
-    // The trap handler does `mret`.
-    // If context_switch is called from trap_handler:
-    //   It returns to trap_handler.
-    //   trap_handler does mret using CURRENT mepc CSR.
-    //   So context_switch MUST restore mepc CSR.
-    // Correct.
-    tasks[id].mepc = (unsigned int)task_entry;
+    // initial state
+    tasks[id].state = TASK_RUNNABLE;
+    tasks[id].wakeup_tick = 0;
+}
+
+// Called from timer interrupt
+void task_tick(void)
+{
+    ticks++;
+
+    // Wake up sleeping tasks
+    for (int i = 0; i < MAX_TASKS; i++) {
+        if (tasks[i].state == TASK_SLEEPING &&
+            tasks[i].wakeup_tick <= ticks) {
+            tasks[i].state = TASK_RUNNABLE;
+        }
+    }
+    
+    schedule();
 }
 
 void schedule(void)
 {
     int prev = current_task;
-    current_task++;
-    if (current_task >= MAX_TASKS)
-        current_task = 0;
-        
-    if (prev != -1) {
-        context_switch(&tasks[prev], &tasks[current_task]);
-    } else {
-        // Should not happen if start_scheduler sets current=0 first
+    int next = prev;
+    int found = 0;
+
+    // Round-robin to find next RUNNABLE task
+    // Start checking from next task
+    for (int i = 0; i < MAX_TASKS; i++) {
+        next = (next + 1) % MAX_TASKS;
+        if (tasks[next].state == TASK_RUNNABLE) {
+            found = 1;
+            break;
+        }
+    }
+
+    if (!found) {
+        // Should not happen if we have an idle task, 
+        // but if it does, stay on current (or idle)
+        // If current is sleeping (and was the only one), we might have an issue
+        // But we ensure at least one task is runnable (idle task)
+        return; 
+    }
+    
+    current_task = next;
+
+    if (prev != -1 && prev != current_task) {
+        context_switch(&tasks[prev].ctx, &tasks[current_task].ctx);
+    } else if (prev == -1) {
+         // Startup: just switch to the first task
+         // We need a dummy old context for the first switch
+         // But start_scheduler handles this differently usually.
+         // Wait, start_scheduler calls context_switch(&dummy, &tasks[0]);
+         // Here we are called from interrupt.
     }
 }
 
 void start_scheduler(void)
 {
-    current_task = 0;
-    // We are spoofing a switch from a dummy context to task 0
-    // But task 0 needs to start clean.
-    // Simplest way: just load task 0 context?
-    // But we need to save OUR context (main) appropriately? 
-    // Main doesn't need to be saved if we never return to it.
+    // We assume task 0 is the first one to run, or we pick one.
+    // Let's pick the first runnable one.
+    int i;
+    for(i=0; i<MAX_TASKS; i++){
+        if(tasks[i].state == TASK_RUNNABLE){
+            current_task = i;
+            break;
+        }
+    }
     
-    // We use a dummy context for "old"
     struct context dummy;
-    context_switch(&dummy, &tasks[0]);
+    context_switch(&dummy, &tasks[current_task].ctx);
 }
 
-// Tasks
-void wait_for_tick(void) {
-    while (!tick_flag); // Wait explicitly for interrupt
-    tick_flag = 0;      // Consume the tick
+void sleep(unsigned int n)
+{
+    unsigned int flags = irq_disable(); // Critical section
+
+    tasks[current_task].state = TASK_SLEEPING;
+    tasks[current_task].wakeup_tick = ticks + n;
+
+    irq_restore(flags);
+
+    // Yield control
+    // We can just wait for next timer interrupt to switch us out, 
+    // OR we can force a schedule.
+    // If we just return, we are still running but marked SLEEPING.
+    // The next timer tick will switch us out.
+    // Better to yield immediately.
+    // To yield immediately, we need a way to trigger schedule synchronously
+    // or wait.
+    
+    // For this simple OS, we can busy wait for the timer to context switch us?
+    // No, that wastes CPU.
+    // We should call schedule() ourselves?
+    // If we call schedule(), it will switch context.
+    // But schedule() expects to be called?
+    
+    // We need to trigger the switch.
+    // Let's assume we can call an assembly trap/yield
+    // Or just call schedule() directly if we are in thread context?
+    // Yes, we can call schedule().
+    
+    // NOTE: schedule() performs context_switch.
+    // context_switch saves current context (at the call site) and loads new.
+    // So when we resume, we return from schedule().
+    
+    schedule();
 }
 
-void taskA(void) {
+void idle_task(void)
+{
     while(1) {
-        wait_for_tick();
+        // Just wait for interrupts
+        // asm volatile("wfi"); // Optional power saving
+    }
+}
+
+void taskA(void)
+{
+    while (1) {
         uart_putc('A');
+        sleep(20);
     }
 }
 
-void taskB(void) {
-    while(1) {
-        wait_for_tick();
+void taskB(void)
+{
+    while (1) {
         uart_putc('B');
+        sleep(40);
     }
 }
 
-void taskC(void) {
-    while(1) {
-        wait_for_tick();
+void taskC(void)
+{
+    while (1) {
         uart_putc('C');
+        sleep(60);
     }
 }

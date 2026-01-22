@@ -27,9 +27,9 @@ void trap_handler(void)
     asm volatile("csrr %0, mcause" : "=r"(mcause));
 
     if ((mcause & 0x80000007) == 0x80000007) {
-        uart_putc('T');
+        // uart_putc('T'); // Removed debug output
         tick_flag = 1;
         timer_init(); // Ack/Rearm
-        schedule();
+        task_tick();  // Update ticks and schedule
     }
 }

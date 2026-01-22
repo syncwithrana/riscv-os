@@ -15,8 +15,8 @@ void main(void)
     init_task(1, taskB);
     init_task(2, taskC);
     
-    // Task 3 is unused or could be idle
-    init_task(3, taskA); // Reuse A for demo
+    // Task 3 is idle task
+    init_task(3, idle_task);
     
     start_scheduler();
     
